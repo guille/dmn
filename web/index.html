@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dmn — web terminal</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .terminal-window {
+      width: 100%;
+      max-width: 1000px;
+      background: #1e1e1e;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .title-bar {
+      background: #2d2d2d;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .controls input {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      border-radius: 4px;
+      color: #e5e5e5;
+      font-size: 12px;
+      padding: 4px 8px;
+      width: 120px;
+    }
+
+    .controls input:disabled {
+      opacity: 0.5;
+    }
+
+    .controls button {
+      background: #3a3a3a;
+      border: 1px solid #555;
+      border-radius: 4px;
+      color: #e5e5e5;
+      font-size: 11px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+
+    .controls button:hover:not(:disabled) {
+      background: #4a4a4a;
+    }
+
+    .controls button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .title {
+      color: #e5e5e5;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+
+    .connection-status {
+      margin-left: auto;
+      font-size: 11px;
+      color: #888;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .connection-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #666;
+    }
+
+    .connection-dot.connected {
+      background: #27c93f;
+    }
+
+    #terminal-container {
+      height: 600px;
+      padding: 16px;
+      background: #1e1e1e;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #terminal-container canvas {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 20px 10px; }
+      #terminal-container { height: 500px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="terminal-window">
+    <div class="title-bar">
+      <div class="title">dmn</div>
+      <div class="controls">
+        <input type="text" id="session-input" placeholder="session" />
+        <label style="color:#888;font-size:11px;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" id="readonly-check" /> read-only
+        </label>
+        <button id="btn-connect">Connect</button>
+        <button id="btn-disconnect" disabled>Disconnect</button>
+      </div>
+      <div class="connection-status">
+        <span class="connection-dot" id="connection-dot"></span>
+        <span id="connection-text">Disconnected</span>
+      </div>
+    </div>
+    <div id="terminal-container"></div>
+  </div>
+
+  <script type="module">
+    import { init, Terminal, FitAddon } from '/dist/ghostty-web.js';
+
+    let term;
+    let ws;
+    let fitAddon;
+    let autoReconnect = false;
+
+    const sessionInput = document.getElementById('session-input');
+    const readonlyCheck = document.getElementById('readonly-check');
+    const btnConnect = document.getElementById('btn-connect');
+    const btnDisconnect = document.getElementById('btn-disconnect');
+
+    async function initTerminal() {
+      await init();
+
+      term = new Terminal({
+        cursorBlink: false,
+        fontSize: 14,
+        theme: {
+          background: '#1e1e1e',
+          foreground: '#d4d4d4',
+        },
+        scrollback: 10000,
+      });
+
+      fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+
+      term.open(document.getElementById('terminal-container'));
+      fitAddon.fit();
+      fitAddon.observeResize();
+
+      window.addEventListener('resize', () => fitAddon.fit());
+
+      term.onResize((size) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+        }
+      });
+
+      term.onData((data) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        }
+      });
+
+      // Get default session from server (passed as query param on page load or from bridge default)
+      const params = new URLSearchParams(window.location.search);
+      const defaultSession = params.get('session') || sessionInput.dataset.default || 'default';
+      sessionInput.value = defaultSession;
+
+      // Auto-connect if session was provided
+      if (params.get('session') || sessionInput.dataset.default) {
+        connect();
+      }
+    }
+
+    function connect() {
+      const session = sessionInput.value.trim() || 'default';
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+
+      autoReconnect = true;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const readonly = readonlyCheck.checked ? '&readonly=1' : '';
+      const wsUrl = `${protocol}//${window.location.host}/ws?session=${encodeURIComponent(session)}&cols=${term.cols}&rows=${term.rows}${readonly}`;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        updateUI(true);
+      };
+
+      ws.onmessage = (event) => {
+        term.write(event.data);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        updateUI(false);
+        if (autoReconnect) {
+          term.write('\r\n\x1b[90m[disconnected — reconnecting...]\x1b[0m\r\n');
+          setTimeout(() => {
+            if (autoReconnect) connect();
+          }, 3000);
+        }
+      };
+    }
+
+    function disconnect() {
+      autoReconnect = false;
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      updateUI(false);
+      term.write('\r\n\x1b[90m[disconnected]\x1b[0m\r\n');
+    }
+
+    function updateUI(connected) {
+      const dot = document.getElementById('connection-dot');
+      const text = document.getElementById('connection-text');
+      sessionInput.disabled = connected;
+      readonlyCheck.disabled = connected;
+      btnConnect.disabled = connected;
+      btnDisconnect.disabled = !connected;
+      if (connected) {
+        dot.classList.add('connected');
+        text.textContent = 'Connected';
+      } else {
+        dot.classList.remove('connected');
+        text.textContent = 'Disconnected';
+      }
+    }
+
+    btnConnect.addEventListener('click', connect);
+    btnDisconnect.addEventListener('click', disconnect);
+    sessionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') connect();
+    });
+
+    initTerminal();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,65 @@
+[tools]
+node   = "latest"
+python = "3.14"
+
+[settings]
+python.uv_venv_auto = true
+
+[env]
+_.python.venv = { path = ".venv" }
+
+[tasks.check]
+description = "Format & lint the code"
+depends     = ["format", "lint"]
+
+[tasks.format]
+description = "Format the code"
+run         = "uv run ruff format"
+
+[tasks.lint]
+description = "Lint the code"
+run         = ["uv run ruff check", "basedpyright --level error src/ tests/"]
+
+[tasks.hooks]
+description = "Install git hooks"
+run         = "cp hooks/* .git/hooks/"
+
+[tasks.server]
+description = "Run server"
+run         = "uv run -- python -m dmn"
+alias       = "dmn"
+
+[tasks.client]
+description = "Run client"
+run         = "uv run -- python scripts/client.py"
+
+[tasks.attach]
+description = "Run attach client"
+run         = "python -m dmn.attach"
+
+[tasks.test]
+description = "Run tests"
+run         = "uv run -- pytest"
+
+[tasks.web]
+description = "Run web demo"
+run         = "uv run --script web/bridge.py"
+
+[tasks."setup:node"]
+description = "Install node deps"
+hide        = true
+dir         = "web"
+run         = "npm install"
+
+[tasks.package]
+description = "Build wheels"
+run         = "uv build"
+# uv publish --index testpypi
+# uv publish
+
+[hooks]
+postinstall = [
+  "uv sync",
+  "mise r hooks",
+  "mise r setup:node",
+]
