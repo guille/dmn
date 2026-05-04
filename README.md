@@ -2,6 +2,8 @@
 
 A lightweight PTY daemon. Spawns a shell in a pseudo-terminal and exposes it over a Unix socket, allowing multiple clients to send commands, attach interactively, or watch the output read-only.
 
+You can read more about how I built this and watch a demo video showcasing dmn [in my blog](https://guille.github.io/posts/dmn/).
+
 ## Quick start
 
 Install via pip/uv:
