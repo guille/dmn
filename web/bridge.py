@@ -104,7 +104,7 @@ async def handle_ws(request: web.Request) -> web.WebSocketResponse:
                 data = await reader.read(4096)
                 if not data:
                     break
-                await ws.send_str(data.decode("utf-8", errors="replace"))
+                await ws.send_bytes(data)
         except ConnectionResetError, asyncio.CancelledError:
             pass
 
