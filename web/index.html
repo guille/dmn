@@ -3,8 +3,11 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>dmn — web terminal</title>
+  <link rel="icon" href="data:," />
   <style>
     * {
       margin: 0;
@@ -12,32 +15,48 @@
       box-sizing: border-box;
     }
 
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+    }
+
     body {
       font-family: sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      min-height: 100vh;
+      background: #0f172a;
       display: flex;
-      align-items: center;
+      align-items: stretch;
       justify-content: center;
-      padding: 40px 20px;
+      padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
     }
 
     .terminal-window {
       width: 100%;
-      max-width: 1000px;
+      max-width: 1200px;
       background: #1e1e1e;
       border-radius: 12px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
     .title-bar {
       background: #2d2d2d;
-      padding: 12px 16px;
+      padding: 10px 12px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       border-bottom: 1px solid #1a1a1a;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .title {
+      color: #e5e5e5;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.3px;
     }
 
     .controls {
@@ -46,14 +65,14 @@
       gap: 8px;
     }
 
-    .controls input {
+    .controls input[type="text"] {
       background: #1e1e1e;
       border: 1px solid #444;
       border-radius: 4px;
       color: #e5e5e5;
       font-size: 12px;
       padding: 4px 8px;
-      width: 120px;
+      width: 100px;
     }
 
     .controls input:disabled {
@@ -79,11 +98,12 @@
       cursor: default;
     }
 
-    .title {
-      color: #e5e5e5;
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.3px;
+    .controls .readonly-label {
+      color: #888;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
     .connection-status {
@@ -107,20 +127,129 @@
     }
 
     #terminal-container {
-      height: 600px;
-      padding: 16px;
+      flex: 1;
       background: #1e1e1e;
       position: relative;
       overflow: hidden;
+      touch-action: none;
     }
 
     #terminal-container canvas {
       display: block;
     }
 
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #888;
+      font-size: 13px;
+    }
+
+    .loading-overlay.hidden {
+      display: none;
+    }
+
+    /* Special keys toolbar */
+    .key-bar {
+      display: none;
+      background: #2d2d2d;
+      border-top: 1px solid #1a1a1a;
+      padding: 6px 8px;
+      gap: 4px;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+
+    .key-bar button {
+      background: #3a3a3a;
+      border: 1px solid #555;
+      border-radius: 4px;
+      color: #e5e5e5;
+      font-size: 12px;
+      padding: 8px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .key-bar button:active {
+      background: #555;
+    }
+
+    .key-bar button.sticky.active {
+      background: #4a7c59;
+      border-color: #27c93f;
+    }
+
+    /* Mobile styles */
     @media (max-width: 768px) {
-      body { padding: 20px 10px; }
-      #terminal-container { height: 500px; }
+      body {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+
+      .terminal-window {
+        border-radius: 0;
+        box-shadow: none;
+        max-width: none;
+      }
+
+      .title-bar {
+        padding: 8px 10px;
+        gap: 6px;
+      }
+
+      .controls .readonly-label {
+        display: none;
+      }
+
+      .key-bar {
+        display: flex;
+      }
+    }
+
+    /* Show key bar on any touch device regardless of width */
+    @media (pointer: coarse) {
+      .key-bar {
+        display: flex;
+      }
+    }
+
+    /* Compact layout for small viewports (applied via JS class) */
+    .terminal-window.compact .title {
+      display: none;
+    }
+
+    .terminal-window.compact .title-bar {
+      padding: 4px 8px;
+    }
+
+    .terminal-window.compact .controls input[type="text"] {
+      font-size: 11px;
+      padding: 2px 6px;
+      width: 80px;
+    }
+
+    .terminal-window.compact .controls button {
+      font-size: 10px;
+      padding: 3px 8px;
+    }
+
+    .terminal-window.compact .connection-status {
+      font-size: 10px;
+    }
+
+    .terminal-window.compact .key-bar {
+      padding: 4px 6px;
+      gap: 3px;
+    }
+
+    .terminal-window.compact .key-bar button {
+      font-size: 11px;
+      padding: 6px 10px;
     }
   </style>
 </head>
@@ -131,7 +260,7 @@
       <div class="title">dmn</div>
       <div class="controls">
         <input type="text" id="session-input" placeholder="session" />
-        <label style="color:#888;font-size:11px;display:flex;align-items:center;gap:4px">
+        <label class="readonly-label">
           <input type="checkbox" id="readonly-check" /> read-only
         </label>
         <button id="btn-connect">Connect</button>
@@ -142,7 +271,18 @@
         <span id="connection-text">Disconnected</span>
       </div>
     </div>
-    <div id="terminal-container"></div>
+    <div id="terminal-container">
+      <div class="loading-overlay" id="loading-overlay">Loading terminal...</div>
+    </div>
+    <div class="key-bar" id="key-bar">
+      <button data-key="esc">Esc</button>
+      <button data-key="tab">Tab</button>
+      <button data-sticky="ctrl" class="sticky">Ctrl</button>
+      <button data-key="up">&#x2191;</button>
+      <button data-key="down">&#x2193;</button>
+      <button data-key="left">&#x2190;</button>
+      <button data-key="right">&#x2192;</button>
+    </div>
   </div>
 
   <script type="module">
@@ -152,14 +292,100 @@
     let ws;
     let fitAddon;
     let autoReconnect = false;
+    let reconnectTimer = null;
+    let ctrlActive = false;
+    let appCursorMode = false;
 
     const sessionInput = document.getElementById('session-input');
     const readonlyCheck = document.getElementById('readonly-check');
     const btnConnect = document.getElementById('btn-connect');
     const btnDisconnect = document.getElementById('btn-disconnect');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const keyBar = document.getElementById('key-bar');
+
+    // Key map for special keys
+    function resolveKey(name) {
+      const prefix = appCursorMode ? '\x1bO' : '\x1b[';
+      const map = {
+        'esc': '\x1b',
+        'tab': '\t',
+        'up': prefix + 'A',
+        'down': prefix + 'B',
+        'right': prefix + 'C',
+        'left': prefix + 'D',
+      };
+      return map[name] || name;
+    }
+
+    function deactivateCtrl() {
+      ctrlActive = false;
+      keyBar.querySelector('[data-sticky="ctrl"]').classList.remove('active');
+    }
+
+    function applyCtrl(ch) {
+      const code = ch.charCodeAt(0);
+      if (code >= 97 && code <= 122) return String.fromCharCode(code - 96);
+      if (code >= 65 && code <= 90) return String.fromCharCode(code - 64);
+      return ch;
+    }
+
+    // Special keys toolbar
+    function handleKeyButton(btn) {
+      if (!btn || !term) return;
+      if (readonlyCheck.checked) return;
+
+      // Sticky modifier handling
+      if (btn.dataset.sticky === 'ctrl') {
+        ctrlActive = !ctrlActive;
+        btn.classList.toggle('active', ctrlActive);
+        return;
+      }
+
+      let key = resolveKey(btn.dataset.key);
+      if (!key) return;
+
+      // Apply ctrl modifier to single printable chars
+      if (ctrlActive && key.length === 1) {
+        key = applyCtrl(key);
+        deactivateCtrl();
+      }
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(key);
+      }
+      term.focus();
+    }
+
+    keyBar.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      handleKeyButton(btn);
+    });
+
+    // Prevent key-bar buttons from stealing focus
+    keyBar.addEventListener('mousedown', (e) => {
+      if (e.target.closest('button')) e.preventDefault();
+    });
+    keyBar.addEventListener('touchstart', (e) => {
+      if (e.target.closest('button')) e.preventDefault();
+    }, { passive: false });
+
+    // Handle touchend for mobile since click may not fire after preventDefault
+    keyBar.addEventListener('touchend', (e) => {
+      const btn = e.target.closest('button');
+      if (btn) {
+        e.preventDefault();
+        handleKeyButton(btn);
+      }
+    }, { passive: false });
 
     async function initTerminal() {
-      await init();
+      try {
+        await init();
+      } catch (e) {
+        loadingOverlay.textContent = `Failed to load terminal: ${e.message}`;
+        console.error('Terminal init failed:', e);
+        return;
+      }
 
       term = new Terminal({
         cursorBlink: false,
@@ -178,7 +404,159 @@
       fitAddon.fit();
       fitAddon.observeResize();
 
-      window.addEventListener('resize', () => fitAddon.fit());
+      // Disable mobile keyboard autocapitalize/autocorrect on terminal inputs.
+      // ghostty-web may recreate its textarea, so we use a MutationObserver.
+      const terminalContainer = document.getElementById('terminal-container');
+
+      function configureTerminalInput(el) {
+        el.setAttribute('inputmode', 'none');
+        el.setAttribute('autocapitalize', 'none');
+        el.setAttribute('autocorrect', 'off');
+        el.setAttribute('autocomplete', 'off');
+        el.setAttribute('spellcheck', 'false');
+        // Re-apply on focus in case the terminal emulator resets attributes
+        el.addEventListener('focus', () => {
+          el.setAttribute('autocapitalize', 'none');
+          el.setAttribute('autocorrect', 'off');
+        });
+        // Re-hide keyboard when focus is lost
+        el.addEventListener('blur', () => {
+          el.setAttribute('inputmode', 'none');
+        });
+      }
+
+      // NOTE: autocapitalize="none" doesn't work on Firefox Android — the keyboard
+      // app controls capitalization regardless of HTML attributes. Users can
+      // long-press shift or switch to a "code" keyboard layout as a workaround.
+      let textarea = terminalContainer.querySelector('textarea');
+      if (textarea) configureTerminalInput(textarea);
+
+      const inputObserver = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (node.nodeName === 'TEXTAREA' || node.nodeName === 'INPUT') {
+              textarea = node;
+              configureTerminalInput(node);
+            }
+            if (node.querySelector) {
+              const ta = node.querySelector('textarea, input');
+              if (ta) { textarea = ta; configureTerminalInput(ta); }
+            }
+          }
+        }
+      });
+      inputObserver.observe(terminalContainer, { childList: true, subtree: true });
+
+      // Resize terminal to match visual viewport (handles mobile keyboard)
+      function resizeToVisualViewport() {
+        const terminalWindow = document.querySelector('.terminal-window');
+        if (!terminalWindow) return;
+
+        if (window.visualViewport) {
+          const availableHeight = window.visualViewport.height;
+          terminalWindow.style.height = availableHeight + 'px';
+
+          // Toggle compact layout when viewport is small (keyboard open)
+          terminalWindow.classList.toggle('compact', availableHeight <= 500);
+        }
+
+        fitAddon.fit();
+      }
+
+      // Initial resize
+      resizeToVisualViewport();
+
+      // Listen for visual viewport changes (keyboard open/close)
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resizeToVisualViewport);
+      }
+
+      // Touch: tap to open keyboard, scroll to navigate scrollback
+      // NOTE: Touch scrolling is implemented here because ghostty-web's canvas
+      // doesn't handle touch scroll natively. Remove this block if/when the
+      // terminal emulator gains native touch scroll support.
+      let touchStartY = null;
+      let lastTouchY = null;
+      let lastTouchTime = 0;
+      let touchScrollAccum = 0;
+      let touchVelocity = 0;
+      let momentumId = null;
+      let didScroll = false;
+      const SCROLL_TAP_THRESHOLD = 10;
+      const PX_PER_LINE = 20;
+
+      terminalContainer.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          touchStartY = e.touches[0].clientY;
+          lastTouchY = touchStartY;
+          lastTouchTime = Date.now();
+          touchScrollAccum = 0;
+          touchVelocity = 0;
+          didScroll = false;
+          if (momentumId) {
+            cancelAnimationFrame(momentumId);
+            momentumId = null;
+          }
+        }
+      }, { passive: true });
+
+      terminalContainer.addEventListener('touchmove', (e) => {
+        if (touchStartY === null || e.touches.length !== 1) return;
+        const currentY = e.touches[0].clientY;
+        const now = Date.now();
+
+        if (!didScroll) {
+          if (Math.abs(currentY - touchStartY) > SCROLL_TAP_THRESHOLD) {
+            didScroll = true;
+          } else {
+            return;
+          }
+        }
+
+        const deltaY = lastTouchY - currentY;
+        const dt = now - lastTouchTime;
+        lastTouchY = currentY;
+        lastTouchTime = now;
+
+        if (dt > 0) touchVelocity = deltaY / dt;
+
+        touchScrollAccum += deltaY;
+        const lines = Math.trunc(touchScrollAccum / PX_PER_LINE);
+        if (lines !== 0) {
+          term.scrollLines(lines);
+          touchScrollAccum -= lines * PX_PER_LINE;
+        }
+      }, { passive: true });
+
+      terminalContainer.addEventListener('touchend', () => {
+        if (!didScroll && textarea) {
+          textarea.setAttribute('inputmode', 'text');
+          term.focus();
+        } else if (Math.abs(touchVelocity) > 0.3) {
+          // Momentum scroll
+          const startVelocity = touchVelocity;
+          const startTime = performance.now();
+          const duration = 600;
+          let accum = 0;
+
+          function step(now) {
+            const progress = (now - startTime) / duration;
+            if (progress >= 1) { momentumId = null; return; }
+            const v = startVelocity * Math.pow(1 - progress, 3);
+            accum += (v * 16) / PX_PER_LINE;
+            const lines = Math.trunc(accum);
+            if (lines !== 0) { term.scrollLines(lines); accum -= lines; }
+            momentumId = requestAnimationFrame(step);
+          }
+          momentumId = requestAnimationFrame(step);
+        }
+        touchStartY = null;
+        lastTouchY = null;
+        touchScrollAccum = 0;
+        touchVelocity = 0;
+      });
+
+      loadingOverlay.classList.add('hidden');
 
       term.onResize((size) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -187,12 +565,33 @@
       });
 
       term.onData((data) => {
+        if (readonlyCheck.checked) return;
         if (ws && ws.readyState === WebSocket.OPEN) {
+          if (ctrlActive && data.length === 1) {
+            data = applyCtrl(data);
+            deactivateCtrl();
+          }
           ws.send(data);
         }
       });
 
-      // Get default session from server (passed as query param on page load or from bridge default)
+      // Track application cursor mode (DECCKM) via output
+      // \x1b[?1h sets DECCKM (app cursor), \x1b[?1l resets it.
+      // Match exactly mode 1 (not 10, 100, 1000, etc.)
+      const DECCKM_RE = /\x1b\[\?1([hl])/g;
+      const origWrite = term.write.bind(term);
+      term.write = function(data) {
+        if (typeof data === 'string') {
+          let m;
+          DECCKM_RE.lastIndex = 0;
+          while ((m = DECCKM_RE.exec(data)) !== null) {
+            appCursorMode = m[1] === 'h';
+          }
+        }
+        return origWrite(data);
+      };
+
+      // Get default session from server
       const params = new URLSearchParams(window.location.search);
       const defaultSession = params.get('session') || sessionInput.dataset.default || 'default';
       sessionInput.value = defaultSession;
@@ -205,7 +604,12 @@
 
     function connect() {
       const session = sessionInput.value.trim() || 'default';
-      if (ws && ws.readyState === WebSocket.OPEN) return;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
 
       autoReconnect = true;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -216,6 +620,7 @@
 
       ws.onopen = () => {
         updateUI(true);
+        term.focus();
       };
 
       ws.onmessage = (event) => {
@@ -230,7 +635,8 @@
         updateUI(false);
         if (autoReconnect) {
           term.write('\r\n\x1b[90m[disconnected — reconnecting...]\x1b[0m\r\n');
-          setTimeout(() => {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
             if (autoReconnect) connect();
           }, 3000);
         }
@@ -239,6 +645,10 @@
 
     function disconnect() {
       autoReconnect = false;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       if (ws) {
         ws.close();
         ws = null;
