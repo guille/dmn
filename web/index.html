@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>dmn — web terminal</title>
   <link rel="icon" href="data:," />
@@ -14,7 +15,8 @@
       box-sizing: border-box;
     }
 
-    html, body {
+    html,
+    body {
       height: 100%;
       overflow: hidden;
     }
@@ -222,6 +224,40 @@
         display: flex;
       }
     }
+
+    /* Compact layout for small viewports (applied via JS class) */
+    .terminal-window.compact .title {
+      display: none;
+    }
+
+    .terminal-window.compact .title-bar {
+      padding: 4px 8px;
+    }
+
+    .terminal-window.compact .controls input[type="text"] {
+      font-size: 11px;
+      padding: 2px 6px;
+      width: 80px;
+    }
+
+    .terminal-window.compact .controls button {
+      font-size: 10px;
+      padding: 3px 8px;
+    }
+
+    .terminal-window.compact .connection-status {
+      font-size: 10px;
+    }
+
+    .terminal-window.compact .key-bar {
+      padding: 4px 6px;
+      gap: 3px;
+    }
+
+    .terminal-window.compact .key-bar button {
+      font-size: 11px;
+      padding: 6px 10px;
+    }
   </style>
 </head>
 
@@ -301,8 +337,7 @@
     }
 
     // Special keys toolbar
-    keyBar.addEventListener('click', (e) => {
-      const btn = e.target.closest('button');
+    function handleKeyButton(btn) {
       if (!btn || !term) return;
       if (readonlyCheck.checked) return;
 
@@ -326,14 +361,25 @@
         ws.send(key);
       }
       term.focus();
+    }
+
+    keyBar.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      handleKeyButton(btn);
     });
 
-    // Prevent key-bar buttons from stealing focus
-    keyBar.addEventListener('mousedown', (e) => {
-      if (e.target.closest('button')) e.preventDefault();
-    });
+    // Prevent key-bar buttons from stealing focus on touch devices
     keyBar.addEventListener('touchstart', (e) => {
       if (e.target.closest('button')) e.preventDefault();
+    }, { passive: false });
+
+    // Handle touchend for mobile since click may not fire after preventDefault
+    keyBar.addEventListener('touchend', (e) => {
+      const btn = e.target.closest('button');
+      if (btn) {
+        e.preventDefault();
+        handleKeyButton(btn);
+      }
     }, { passive: false });
 
     async function initTerminal() {
@@ -361,6 +407,170 @@
       term.open(document.getElementById('terminal-container'));
       fitAddon.fit();
       fitAddon.observeResize();
+
+      // Prevent keyboard from opening on touch by default.
+      // We'll set inputmode="text" only on tap (not scroll) to open keyboard for typing.
+      const textarea = document.querySelector('#terminal-container textarea');
+      if (textarea) {
+        textarea.setAttribute('inputmode', 'none');
+        textarea.addEventListener('blur', () => {
+          textarea.setAttribute('inputmode', 'none');
+        });
+      }
+
+      // Touch scrolling state (declared early so resizeToVisualViewport can reference it)
+      let touchStartX = null;
+      let touchStartY = null;
+      let touchScrollAccumulator = 0;
+      let touchVelocity = 0;
+      let lastTouchY = null;
+      let lastTouchTime = 0;
+      let momentumId = null;
+      let userScrolling = false;
+      let didScroll = false;
+      const TOUCH_SCROLL_THRESHOLD = 10;
+
+      // Resize terminal to match visual viewport (handles mobile keyboard)
+      function resizeToVisualViewport() {
+        const terminalWindow = document.querySelector('.terminal-window');
+        if (!terminalWindow) return;
+
+        if (window.visualViewport) {
+          // Use visualViewport height which accounts for the on-screen keyboard
+          const availableHeight = window.visualViewport.height;
+          terminalWindow.style.height = availableHeight + 'px';
+
+          // Toggle compact layout when viewport is small (keyboard open)
+          terminalWindow.classList.toggle('compact', availableHeight <= 500);
+        }
+
+        const wasAtBottom = term.viewportY === 0;
+        fitAddon.fit();
+        // Don't auto-scroll on resize — only new output should trigger that
+      }
+
+      // Initial resize
+      resizeToVisualViewport();
+
+      // Listen for visual viewport changes (keyboard open/close)
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resizeToVisualViewport);
+        window.visualViewport.addEventListener('scroll', resizeToVisualViewport);
+      }
+
+      // Also listen for regular resize as fallback
+      window.addEventListener('resize', resizeToVisualViewport);
+
+      // Touch scrolling with momentum for mobile
+      const terminalContainer = document.getElementById('terminal-container');
+      const SCROLL_TAP_THRESHOLD = 10; // px to distinguish tap from scroll
+
+      terminalContainer.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          lastTouchY = touchStartY;
+          lastTouchTime = Date.now();
+          touchScrollAccumulator = 0;
+          touchVelocity = 0;
+          userScrolling = true;
+          didScroll = false;
+          if (momentumId) {
+            cancelAnimationFrame(momentumId);
+            momentumId = null;
+          }
+        }
+      }, { passive: true });
+
+      terminalContainer.addEventListener('touchmove', (e) => {
+        if (touchStartY === null || e.touches.length !== 1) return;
+
+        const currentX = e.touches[0].clientX;
+        const currentY = e.touches[0].clientY;
+        const now = Date.now();
+        const dt = now - lastTouchTime;
+
+        const deltaY = lastTouchY - currentY;
+        lastTouchY = currentY;
+        lastTouchTime = now;
+
+        // Detect if this is a scroll gesture (not just a tap)
+        if (!didScroll) {
+          const dx = Math.abs(currentX - touchStartX);
+          const dy = Math.abs(currentY - touchStartY);
+          if (dx > SCROLL_TAP_THRESHOLD || dy > SCROLL_TAP_THRESHOLD) {
+            didScroll = true;
+          }
+        }
+
+        // Track velocity (pixels per ms)
+        if (dt > 0) {
+          touchVelocity = deltaY / dt;
+        }
+
+        touchScrollAccumulator += deltaY;
+
+        if (Math.abs(touchScrollAccumulator) >= TOUCH_SCROLL_THRESHOLD) {
+          const lines = Math.sign(touchScrollAccumulator);
+          term.scrollLines(lines);
+          touchScrollAccumulator = 0;
+        }
+      }, { passive: true });
+
+      terminalContainer.addEventListener('touchend', (e) => {
+        // If it was a tap (no scroll), open keyboard for typing
+        if (!didScroll) {
+          if (textarea) {
+            textarea.setAttribute('inputmode', 'text');
+            term.focus();
+          }
+        }
+
+        // Apply momentum if velocity is significant
+        if (Math.abs(touchVelocity) > 0.1) {
+          applyMomentum(touchVelocity);
+        } else {
+          userScrolling = false;
+        }
+        touchStartX = null;
+        touchStartY = null;
+        touchScrollAccumulator = 0;
+        touchVelocity = 0;
+      });
+
+      function applyMomentum(velocity) {
+        const startTime = performance.now();
+        const startVelocity = velocity;
+        const duration = 500;
+        let accumulator = 0;
+
+        function step(now) {
+          const elapsed = now - startTime;
+          const progress = elapsed / duration;
+
+          if (progress >= 1) {
+            momentumId = null;
+            userScrolling = false;
+            return;
+          }
+
+          const easedVelocity = startVelocity * Math.pow(1 - progress, 3);
+
+          // easedVelocity is in px/ms, convert to lines per frame
+          // TOUCH_SCROLL_THRESHOLD px = 1 line, ~16ms per frame
+          accumulator += (easedVelocity * 16) / TOUCH_SCROLL_THRESHOLD;
+
+          const lines = Math.trunc(accumulator);
+          if (lines !== 0) {
+            term.scrollLines(lines);
+            accumulator -= lines;
+          }
+
+          momentumId = requestAnimationFrame(step);
+        }
+
+        momentumId = requestAnimationFrame(step);
+      }
 
       loadingOverlay.classList.add('hidden');
 
@@ -390,7 +600,14 @@
           if (data.includes('\x1b[?1h')) appCursorMode = true;
           if (data.includes('\x1b[?1l')) appCursorMode = false;
         }
-        return origWrite(data);
+
+        // Auto-scroll to bottom only when new output arrives and user was already at bottom
+        const wasAtBottom = term.viewportY === 0;
+        const result = origWrite(data);
+        if (wasAtBottom && !userScrolling) {
+          term.scrollToBottom();
+        }
+        return result;
       };
 
       // Get default session from server
