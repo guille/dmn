@@ -1,5 +1,6 @@
 # pyright: reportUnusedCallResult=false
 
+import contextlib
 import errno
 import logging
 import os
@@ -20,7 +21,7 @@ class EventLoop:
         self.tasks: dict[int, Task] = {}
         self._stop = False
 
-    def register(self, task: "Task") -> None:
+    def register(self, task: Task) -> None:
         fd = task.fileno()
         if fd in self.tasks:
             return
@@ -31,21 +32,17 @@ class EventLoop:
             self._selector.register(fd, interests, task)
         self.tasks[fd] = task
 
-    def unregister(self, task: "Task") -> None:
+    def unregister(self, task: Task) -> None:
         fd = task.fileno()
-        try:
+        with contextlib.suppress(Exception):
             self._selector.unregister(fd)
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             task.on_close()
-        except Exception:
-            pass
 
         if fd in self.tasks:
             del self.tasks[fd]
 
-    def modify(self, task: "Task", interests: int) -> None:
+    def modify(self, task: Task, interests: int) -> None:
         fd = task.fileno()
 
         try:
@@ -97,12 +94,10 @@ class EventLoop:
                 task.on_readable()
             if mask & selectors.EVENT_WRITE:
                 task.on_writable()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             log.warning("task %s error: %s", task.__class__.__name__, exc)
-            try:
+            with contextlib.suppress(Exception):
                 task.on_error(exc)
-            except Exception:
-                pass
 
     def _drain(self):
         deadline = time.monotonic() + 0.2  # 200ms max
@@ -115,8 +110,6 @@ class EventLoop:
 
     def _cleanup(self) -> None:
         for task in list(self.tasks.values()):
-            try:
+            with contextlib.suppress(Exception):
                 self.unregister(task)
-            except Exception:
-                pass
         self._selector.close()

@@ -1,4 +1,5 @@
 # pyright: reportUnusedCallResult=false
+import contextlib
 import json
 import socket
 import struct
@@ -24,7 +25,7 @@ class HandleSockConnectionTask:
         self,
         sock: socket.socket,
         dispatcher: CommandDispatcher,
-        pty_task: "PTYTask",
+        pty_task: PTYTask,
         *,
         loop: EventLoopProtocol,
     ):
@@ -88,7 +89,7 @@ class HandleSockConnectionTask:
             req_type: str = obj.get("type", "")
             payload = obj.get("payload", {})
             request = Request(type=req_type, payload=payload)
-        except Exception:
+        except Exception:  # noqa: BLE001
             response = Response(ok=False, error="invalid json")
             self._enqueue_response(json.dumps(response.to_dict()).encode())
             return
@@ -195,7 +196,5 @@ class HandleSockConnectionTask:
     def on_close(self) -> None:
         if self._attached or self._watching:
             self._pty_task.remove_output_listener(self._on_pty_output)
-        try:
+        with contextlib.suppress(Exception):
             self.sock.close()
-        except Exception:
-            pass

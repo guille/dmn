@@ -48,7 +48,7 @@ def main():
             s.connect(path)
             s.sendall(payload.encode())
             s.close()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print("error:", e)
 
 

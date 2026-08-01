@@ -1,7 +1,9 @@
 # pyright: reportUnusedCallResult=false
+import contextlib
 import logging
 import socket
-from typing import Callable, final
+from collections.abc import Callable
+from typing import final
 
 from dmn.protocols import EventLoopProtocol
 from dmn.tasks import Interest, Task
@@ -11,7 +13,7 @@ log = logging.getLogger(__name__)
 
 @final
 class UnixServerTask:
-    """ """
+    """Listen on a Unix socket and spawn a handler task for each incoming connection."""
 
     MAX_ERRORS = 5
 
@@ -45,7 +47,7 @@ class UnixServerTask:
             try:
                 conn_task = self._conn_task_factory(c)
                 self.loop.register(conn_task)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 c.close()
 
             self._error_count = 0
@@ -61,7 +63,5 @@ class UnixServerTask:
             self.loop.stop()
 
     def on_close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.sock.close()
-        except Exception:
-            pass

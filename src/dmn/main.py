@@ -1,6 +1,7 @@
 # pyright: reportUnusedCallResult=false
 
 import argparse
+import contextlib
 import errno
 import logging
 import logging.handlers
@@ -72,7 +73,7 @@ def bind_socket(path: str) -> socket.socket:
             raise
         else:
             sock.close()
-            raise Exception("dmn already running in a terminal; exiting.")
+            raise RuntimeError("dmn already running in a terminal; exiting.")
 
     return sock
 
@@ -92,7 +93,7 @@ def main() -> int:
         sock = bind_socket(path)
         sock.setblocking(False)
         os.chmod(path, 0o660)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(e)
         return 2
 
@@ -143,15 +144,11 @@ def main() -> int:
         return 0
     finally:  # CLEANUP
         log.info("shutting down")
-        try:
+        with contextlib.suppress(Exception):
             os.unlink(path)
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             os.kill(shell_pid, signal.SIGHUP)
             os.waitpid(shell_pid, 0)
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

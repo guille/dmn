@@ -23,5 +23,3 @@ class CommandHandler(Protocol):
 
 class HandlerError(Exception):
     """Raised by handlers for client-facing errors (invalid payload, missing fields, etc.)"""
-
-    pass

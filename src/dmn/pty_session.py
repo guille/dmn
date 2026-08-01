@@ -3,14 +3,13 @@ import os
 import pty
 import sys
 import termios
-from typing import NoReturn
 
 # pyright: reportUnusedCallResult=false
 
 
 class PTYSession:
     @classmethod
-    def spawn(cls, shell: str) -> tuple[int, int] | NoReturn:
+    def spawn(cls, shell: str) -> tuple[int, int]:
         master_fd, slave_fd = pty.openpty()
         fcntl.fcntl(master_fd, fcntl.F_SETFL, os.O_NONBLOCK)
 
@@ -36,7 +35,7 @@ class PTYSession:
             os.environ["PTY_BRIDGE"] = "1"
             try:
                 os.execvp(shell, [shell])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print("exec failed:", e, file=sys.stderr)
                 os._exit(1)
         else:  # parent

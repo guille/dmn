@@ -66,7 +66,7 @@ async def handle_ws(request: web.Request) -> web.WebSocketResponse:
     # Read response (newline-delimited JSON)
     try:
         line = await asyncio.wait_for(reader.readline(), timeout=5.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         await ws.send_str("\x1b[31mATTACH handshake timed out\x1b[0m\r\n")
         writer.close()
         await ws.close()
@@ -138,7 +138,7 @@ async def handle_ws(request: web.Request) -> web.WebSocketResponse:
     t2 = asyncio.create_task(ws_to_sock())
 
     try:
-        done, pending = await asyncio.wait(
+        _done, pending = await asyncio.wait(
             {t1, t2}, return_when=asyncio.FIRST_COMPLETED
         )
         for t in pending:

@@ -1,3 +1,4 @@
+import contextlib
 from typing import final
 
 from dmn.protocols import EventLoopProtocol
@@ -22,10 +23,8 @@ class HandleSigwinchTask:
         return Interest.READ
 
     def on_readable(self):
-        try:
+        with contextlib.suppress(Exception):
             self._terminal_bridge.handle_winch()
-        except Exception:
-            pass
 
     def on_writable(self):
         pass

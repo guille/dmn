@@ -1,3 +1,4 @@
+import contextlib
 import fcntl
 import os
 import struct
@@ -107,10 +108,8 @@ class PTYTask:
 
         self._stdout_sink.write(data)
         for listener in self._output_listeners:
-            try:
+            with contextlib.suppress(Exception):
                 listener(data)
-            except Exception:
-                pass
 
     def on_writable(self) -> None:
         if not self._wbuf:

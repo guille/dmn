@@ -71,35 +71,25 @@ class TerminalBridge(contextlib.AbstractContextManager["TerminalBridge"]):
         _traceback: TracebackType | None,
     ):
         # restore signal handler
-        try:
+        with contextlib.suppress(Exception):
             signal.signal(signal.SIGWINCH, self._old_handler)
-        except Exception:
-            pass
 
         # restore terminal attrs
-        try:
+        with contextlib.suppress(Exception):
             termios.tcsetattr(self.stdin, termios.TCSANOW, self._orig_attrs)
-        except Exception:
-            pass
 
         # close pipe
         for fd in (self._pipe_r, self._pipe_w):
-            try:
+            with contextlib.suppress(Exception):
                 if fd is not None:
                     os.close(fd)
-            except Exception:
-                pass
-        try:
+        with contextlib.suppress(Exception):
             signal.set_wakeup_fd(-1)
-        except Exception:
-            pass
 
     def _adjust_winsize(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             rows, cols = self._get_winsize(self.stdin.fileno())
             self._set_winsize(self.pty_fd, rows, cols)
-        except Exception:
-            pass
 
     def _set_winsize(
         self, fd: FileDescriptorLike, rows: int, cols: int, xpix: int = 0, ypix: int = 0
